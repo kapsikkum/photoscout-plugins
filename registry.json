@@ -19,6 +19,24 @@
           "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
         }
       ]
+    },
+    {
+      "id": "map.24thframe.waze",
+      "name": "Waze police & hazards",
+      "description": "Police, hazard and road reports from Waze via a self-hosted harvester, with a police heatmap built from past sightings.",
+      "author": "PhotoScout",
+      "homepage": "https://github.com/kapsikkum/photoscout-plugin-waze",
+      "category": "map",
+      "latest": "1.1.0",
+      "versions": [
+        {
+          "version": "1.1.0",
+          "zip": "https://github.com/kapsikkum/photoscout-plugin-waze/releases/download/v1.1.0/map.24thframe.waze-1.1.0.zip",
+          "sha256": "10e7274f50a4d2b9a81555131a2cd762849f9b868a83958e27d7d98fe1247673",
+          "minCore": "^1.0",
+          "size": 18073
+        }
+      ]
     }
   ]
 }
