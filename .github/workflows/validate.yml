@@ -1,0 +1,36 @@
+# Checks registry.json on every push to main and every pull request.
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    name: Validate registry.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate registry.json
+        run: node scripts/validate.mjs
+
+      - name: Smoke-test add-entry on a scratch copy
+        run: |
+          set -euo pipefail
+          cp registry.json "$RUNNER_TEMP/registry.json"
+          node scripts/add-entry.mjs --registry "$RUNNER_TEMP/registry.json" \
+            --id ci.example.smoke --name "CI smoke" --category tools \
+            --version 0.0.1 --zip https://example.com/smoke-0.0.1.zip \
+            --sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

@@ -1,0 +1,258 @@
+# Reusable workflow. A plugin repo calls it on release. It builds the plugin's
+# zip with photoscout's plugin CLI, checksums it, attaches it to the release, and
+# (optionally) opens a PR here that lists the new version in registry.json.
+#
+# Caller, in the plugin repo, e.g. .github/workflows/release.yml:
+#
+#   name: release
+#   on:
+#     release:
+#       types: [published]
+#   permissions:
+#     contents: write
+#   jobs:
+#     publish:
+#       uses: kapsikkum/photoscout-plugins/.github/workflows/publish-plugin.yml@main
+#       with:
+#         plugin-dir: .
+#         photoscout-ref: master            # pin a tag once one exists
+#         release-tag: ${{ github.event.release.tag_name }}
+#         open-registry-pr: true
+#       secrets:
+#         REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+#         # PHOTOSCOUT_READ_TOKEN: ${{ secrets.PHOTOSCOUT_READ_TOKEN }}   # only if photoscout is private
+name: publish-plugin
+
+on:
+  workflow_call:
+    inputs:
+      plugin-dir:
+        description: Folder of the plugin in the calling repo, the one that holds plugin.json.
+        type: string
+        required: false
+        default: "."
+      photoscout-repo:
+        description: Repo that has the plugin CLI (scripts/plugin.mjs) and the host manifest rules.
+        type: string
+        required: false
+        default: kapsikkum/photoscout
+      photoscout-ref:
+        description: Branch, tag or SHA of photoscout to build with. Pin a tag once one exists.
+        type: string
+        required: false
+        default: master
+      release-tag:
+        description: Release to attach the zip to. Empty means v<version> from plugin.json. Pass the release that triggered the call.
+        type: string
+        required: false
+        default: ""
+      registry-repo:
+        description: Registry repo that the registry PR targets.
+        type: string
+        required: false
+        default: kapsikkum/photoscout-plugins
+      open-registry-pr:
+        description: Open a PR on registry-repo that adds this version. Needs the REGISTRY_TOKEN secret.
+        type: boolean
+        required: false
+        default: false
+      min-core:
+        description: Optional minCore semver range written into the registry entry.
+        type: string
+        required: false
+        default: ""
+    secrets:
+      PHOTOSCOUT_READ_TOKEN:
+        description: Only if photoscout-repo is private. A token with read access to its contents.
+        required: false
+      REGISTRY_TOKEN:
+        description: Only if open-registry-pr is true. A token that can push a branch to registry-repo and open a PR there.
+        required: false
+
+jobs:
+  build:
+    name: Build, checksum, attach to the release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PLUGIN_DIR: ${{ inputs.plugin-dir }}
+    outputs:
+      id: ${{ steps.meta.outputs.id }}
+      version: ${{ steps.meta.outputs.version }}
+      zip-url: ${{ steps.meta.outputs.zip_url }}
+      sha256: ${{ steps.sum.outputs.sha256 }}
+      size: ${{ steps.sum.outputs.size }}
+    steps:
+      - name: Check out the plugin repo
+        uses: actions/checkout@v4
+
+      - name: Check out photoscout (plugin CLI and host rules)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.photoscout-repo }}
+          ref: ${{ inputs.photoscout-ref }}
+          path: .photoscout-cli
+          token: ${{ secrets.PHOTOSCOUT_READ_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: .photoscout-cli/package-lock.json
+
+      # Installs the whole photoscout workspace, so the first run is slow. esbuild and fflate come from here.
+      - name: Install photoscout dependencies
+        working-directory: .photoscout-cli
+        run: npm ci
+
+      - name: Read plugin.json and name the outputs
+        id: meta
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          node --input-type=module >> "$GITHUB_OUTPUT" <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const dir = process.env.PLUGIN_DIR;
+          const m = JSON.parse(readFileSync(join(dir, 'plugin.json'), 'utf8'));
+          const tag = process.env.RELEASE_TAG || `v${m.version}`;
+          const zipName = `${m.id}-${m.version}.zip`;
+          const outputs = {
+            id: m.id,
+            version: m.version,
+            tag,
+            zip_name: zipName,
+            zip_path: join(dir, 'dist', zipName),
+            zip_url: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${tag}/${zipName}`,
+          };
+          for (const [key, value] of Object.entries(outputs)) console.log(`${key}=${value}`);
+          JS
+
+      # The CLI validates the manifest first, then bundles, then reads the zip back through the host's own check.
+      - name: Build the zip
+        run: node .photoscout-cli/scripts/plugin.mjs build "$PLUGIN_DIR"
+
+      - name: Checksum the zip
+        id: sum
+        env:
+          ZIP: ${{ steps.meta.outputs.zip_path }}
+        run: |
+          set -euo pipefail
+          test -f "$ZIP" || { echo "::error::expected $ZIP after the build"; exit 1; }
+          echo "sha256=$(sha256sum "$ZIP" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c %s "$ZIP")" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the zip to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          ZIP: ${{ steps.meta.outputs.zip_path }}
+          ZIP_NAME: ${{ steps.meta.outputs.zip_name }}
+          PKG_ID: ${{ steps.meta.outputs.id }}
+          PKG_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # Existing assets are never replaced. A changed zip would stop matching the
+            # sha256 in the registry, so re-release with a new version instead.
+            gh release upload "$TAG" "$ZIP" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "$ZIP" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "$TAG" --notes "$PKG_ID $PKG_VERSION"
+          fi
+          ASSETS=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          printf '%s\n' "$ASSETS" | grep -qxF "$ZIP_NAME"
+
+      - name: Keep plugin.json for the registry PR
+        if: ${{ inputs.open-registry-pr }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-meta
+          path: ${{ inputs.plugin-dir }}/plugin.json
+          if-no-files-found: error
+
+  # Ready to use. It runs only when open-registry-pr is true and REGISTRY_TOKEN is passed.
+  # The token must be able to push a branch to registry-repo and open a PR there. Nothing
+  # is pushed to main, and validate.yml checks the PR in the registry repo.
+  registry-pr:
+    name: Open a PR on the registry
+    if: ${{ inputs.open-registry-pr }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ID: ${{ needs.build.outputs.id }}
+      VERSION: ${{ needs.build.outputs.version }}
+      ZIP_URL: ${{ needs.build.outputs.zip-url }}
+      SHA256: ${{ needs.build.outputs.sha256 }}
+      SIZE: ${{ needs.build.outputs.size }}
+      MIN_CORE: ${{ inputs.min-core }}
+      REGISTRY_REPO: ${{ inputs.registry-repo }}
+    steps:
+      - name: Require REGISTRY_TOKEN
+        env:
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::open-registry-pr is true, but the REGISTRY_TOKEN secret was not passed to this workflow."
+            exit 1
+          fi
+
+      - name: Check out the registry
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.registry-repo }}
+          ref: main
+          token: ${{ secrets.REGISTRY_TOKEN }}
+          path: registry
+
+      - name: Download plugin.json
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-meta
+          path: meta
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Add the version (add-entry validates the result)
+        working-directory: registry
+        env:
+          META: ${{ github.workspace }}/meta/plugin.json
+        run: |
+          set -euo pipefail
+          ARGS=(--id "$ID" --name "$(jq -r .name "$META")" --category "$(jq -r .category "$META")"
+                --version "$VERSION" --zip "$ZIP_URL" --sha256 "$SHA256" --size "$SIZE")
+          for key in description author homepage; do
+            value=$(jq -r --arg k "$key" '.[$k] // empty' "$META")
+            if [ -n "$value" ]; then ARGS+=("--$key" "$value"); fi
+          done
+          if [ -n "$MIN_CORE" ]; then ARGS+=(--minCore "$MIN_CORE"); fi
+          node scripts/add-entry.mjs "${ARGS[@]}"
+
+      - name: Commit, push and open the PR
+        working-directory: registry
+        env:
+          GH_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- registry.json; then
+            echo "registry.json already lists $ID $VERSION as given. Nothing to open."
+            exit 0
+          fi
+          BRANCH="plugin/${ID}-${VERSION}"
+          git checkout -b "$BRANCH"
+          git add registry.json
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "registry: ${ID} ${VERSION}"
+          git push -u origin "$BRANCH"
+          gh pr create --repo "$REGISTRY_REPO" --base main --head "$BRANCH" \
+            --title "Add ${ID} ${VERSION}" \
+            --body "Opened by publish-plugin from ${GITHUB_REPOSITORY}. Check the zip URL and sha256 before merging."

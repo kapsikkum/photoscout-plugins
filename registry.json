@@ -1,0 +1,24 @@
+{
+  "$schema": "./registry.schema.json",
+  "$comment": "The registry of PhotoScout plugins. See README.md. The radio-garden entry is a placeholder until its release exists.",
+  "version": 1,
+  "plugins": [
+    {
+      "id": "media.24thframe.radio-garden",
+      "name": "Radio Garden",
+      "description": "Radio stations from radio.garden, placed on the map and playable from the Radio panel.",
+      "author": "PhotoScout",
+      "homepage": "https://radio.garden",
+      "category": "map",
+      "latest": "1.0.0",
+      "versions": [
+        {
+          "$comment": "PLACEHOLDER. The zip does not exist yet and this sha256 is not its real checksum. Replace both with the released asset and its sha256 before publishing.",
+          "version": "1.0.0",
+          "zip": "https://github.com/kapsikkum/photoscout-plugin-media.24thframe.radio-garden/releases/download/v1.0.0/media.24thframe.radio-garden-1.0.0.zip",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    }
+  ]
+}
