@@ -27,7 +27,7 @@
       "author": "PhotoScout",
       "homepage": "https://github.com/kapsikkum/photoscout-plugin-waze",
       "category": "map",
-      "latest": "1.1.0",
+      "latest": "1.2.0",
       "versions": [
         {
           "version": "1.1.0",
@@ -35,6 +35,13 @@
           "sha256": "10e7274f50a4d2b9a81555131a2cd762849f9b868a83958e27d7d98fe1247673",
           "minCore": "^1.0",
           "size": 18073
+        },
+        {
+          "version": "1.2.0",
+          "zip": "https://github.com/kapsikkum/photoscout-plugin-waze/releases/download/v1.2.0/map.24thframe.waze-1.2.0.zip",
+          "sha256": "f34137f52cfc0bbad3d3150c3b9140e91d69e738247f231d47f2de62b87c583c",
+          "minCore": "^1.2",
+          "size": 18301
         }
       ]
     }
