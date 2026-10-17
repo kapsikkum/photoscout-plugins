@@ -70,10 +70,6 @@ Example:
 }
 ```
 
-### Placeholder entry
-
-The `media.24thframe.radio-garden` entry is a placeholder. The zip URL points at a release that does not exist yet, and the sha256 is 64 zeros. Validation warns while a checksum looks like this. Replace both with the real release asset and its checksum before the entry is relied on. Until then, the app lists the plugin and an install fails, so remove the entry if the registry is live before that release exists.
-
 ## Rules
 
 The server checks these on every fetch, in `parseRegistry` (`server/src/plugins/remote.ts`): the `version` is `1`; ids and versions are valid and unique; `latest` is one of the versions; each zip is https without credentials; each sha256 is 64 hex characters; `minCore` is a semver range; `size` is a non-negative integer.
