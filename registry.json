@@ -41,6 +41,24 @@
           "size": 18523
         }
       ]
+    },
+    {
+      "id": "media.24thframe.facebook-events",
+      "name": "Facebook Events (Stealth Browser)",
+      "description": "Scrapes Facebook /events using a stealth automated browser and session cookies.",
+      "author": "PhotoScout",
+      "homepage": "https://github.com/kapsikkum/photoscout-plugin-facebook",
+      "category": "events",
+      "latest": "1.0.0",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "zip": "https://github.com/kapsikkum/photoscout-plugin-facebook/releases/download/v1.0.0/media.24thframe.facebook-events-1.0.0.zip",
+          "sha256": "3d10c193663ccebe4b4dee008b2183194cc61206c49138bcfa73ab7760170813",
+          "minCore": "^1.3",
+          "size": 10260
+        }
+      ]
     }
   ]
 }
