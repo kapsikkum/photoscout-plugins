@@ -49,7 +49,7 @@
       "author": "PhotoScout",
       "homepage": "https://github.com/kapsikkum/photoscout-plugin-facebook",
       "category": "events",
-      "latest": "1.0.1",
+      "latest": "1.0.2",
       "versions": [
         {
           "version": "1.0.0",
@@ -64,6 +64,13 @@
           "sha256": "8e0b58ba801ce4cbb1f0aca00f82c09db27a5aeadc3303d3b88b7925fd574137",
           "minCore": "^1.3",
           "size": 12088
+        },
+        {
+          "version": "1.0.2",
+          "zip": "https://github.com/kapsikkum/photoscout-plugin-facebook/releases/download/v1.0.2/media.24thframe.facebook-events-1.0.2.zip",
+          "sha256": "f10529ee3041ac2cb61f14660ae0bdef74996140395ff466adac294dcf6c8e0b",
+          "minCore": "^1.3",
+          "size": 12105
         }
       ]
     }
